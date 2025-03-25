@@ -14,6 +14,8 @@ import traceback
 import time
 import yfinance as yf
 
+logging.basicConfig(level=logging.INFO)  # Default logging level
+
 
 class shares_analysis:
     
@@ -28,92 +30,45 @@ class shares_analysis:
     
     '''
     
-    def __init__(self, location_base,shares_df=None,get_cache_df = True,cache_df_location = None,build_cache_df = False):
-        self.build_cache_df = build_cache_df
-        self.get_cache_df = get_cache_df#required for saving to cache df
-        self.day_df = None#initialization
-        self.shares_df = None#is None, not the best logic. will be set to parameter shares_df if shares_df is not none and get_cache_df is True
-        aest = timezone('Australia/Sydney')
-        self.json_raw_location = os.path.join(location_base, "asx")
-        self.df_is_updated = True
-        self.model_res_df_location = os.path.join(location_base, "rory_model_results","res_model_df.csv")
-        self.day_df_cache_control_location = os.path.join(location_base, "rory_model_results","day_df_cache_control.json")
+    def __init__(self, location_base,shares_df=None,cache_df_location = None):
 
-        not os.path.isfile(self.day_df_cache_control_location) and pd.DataFrame().to_json(self.day_df_cache_control_location)#instantiate if it doesnt exist.:
+        '''
+        Description of some of the arguments.
+        location_base: used for the model_res_df as well as the yfinance data.
+        shares_df: used to pass if you wish a pandas dataframe instead of using cached data
         
-        
-        
-        self.cached_files = list(pd.read_json(self.day_df_cache_control_location,typ = 'series'))
-        self.saved_files_this_run = []#will reset whenever we save stuff. 
+        '''
+       
+        self.day_df = None#initialization
+        self.shares_df = shares_df#is None, not the best logic. will be set to parameter shares_df if shares_df is not none and get_cache_df is True
+        aest = timezone('Australia/Sydney')
+        self.df_is_updated = True
 
         #in all cases we want to read the yfinance results. It is broken constantly. with api client errors of too many requests. 
-        print("reading metrics yfinance results")
+        logging.info("reading metrics yfinance results")
         self.yfinance_location = os.path.join(location_base, "rory_model_results","yfinance_results.csv") 
         self.share_metric_df= pd.read_csv(self.yfinance_location,index_col = "code")
-        print("metric df yfinance has been read")
-        if self.shares_df is not None and get_cache_df:
-            raise Exception("You passed a shares dataframe and put get_cache_df to True, please set get_cache_df as false or do not pass a shares_df") 
-
-        if cache_df_location is not None:
-
-            self.cache_df_location = cache_df_location
-        else:
-            self.cache_df_location = os.path.join(location_base, "rory_model_results","cache_day_df.csv")
-            print(f"using location for cached df, {self.cache_df_location}")
-        
-        if not get_cache_df:
-            
-            if shares_df is None and not build_cache_df:
-                #LOGIC IF DONT WANT TO GET CACHED DF
-                raise Exception("Please pass a dataframe into shares_df if get_cache_df is False or set build_cache_df to True")
-            
-            self.shares_df = shares_df if shares_df is None else None
-            if build_cache_df:
-
-                self.get_all_raw_data()
-            
-            self.model_res_df = pd.DataFrame()
-            #
-
-        
-            
-
-            
-        else:
-            #LOGIC IF WE DO WANT TO GET CACHED DF
-           
-
-            try:
-                print("reading cached day _df")
-                self.day_df= pd.read_csv(self.cache_df_location)#this will be day df. 
-                print("finished reading cached _df")
-                self.model_res_df = pd.read_csv(self.model_res_df_location,index_col = "Unnamed: 0")
-
-            except Exception as e:
-                print(f"error reading cached df: {e}")
-                print("trying to create df from scratch. This will take much time, cancel and fix code if cache df is wanted")
-                self.get_all_raw_data()
+        logging.info("metric df yfinance has been read")
+       
+        self.model_res_df = pd.DataFrame()
+    
         
         #the only way for day_df to be not None is if cache_df was used and was successful.
         #this is a requirement for the proceeding lines. 
-        print(f"{type(self.shares_df)} shares df type in initialization")
-        df_complete = self.shares_df if self.day_df is None else self.day_df
-       
-        
-        
-        self.all_codes = df_complete['code'].unique()
+        logging.debug(f"{type(self.shares_df)} shares df type in initialization")
+        self.all_codes = self.shares_df['code'].unique()
 
 
         #the below logic requires inplace operations. df_complete is pointing to the same reference objects as either self.shares_df or self.day_df.
         #if a copy is done it will no longer point to the same location, doubling memory usage.
-        df_complete["updated_at"]= pd.to_datetime(df_complete["updated_at"])
+        self.shares_df["updated_at"]= pd.to_datetime(self.shares_df["updated_at"])
         
 
         #the below lines are done if a cashed
         
-        df_complete['aest_time'] = df_complete['updated_at'].dt.tz_convert(aest)
-        df_complete["aest_day"] = df_complete["aest_time"].dt.strftime('%d/%m/%Y')
-        df_complete.reset_index(inplace=True,drop = True)#if this is not done via inplace it will create a copy. also need to drop useless index column
+        self.shares_df['aest_time'] = self.shares_df['updated_at'].dt.tz_convert(aest)
+        self.shares_df["aest_day"] = self.shares_df["aest_time"].dt.strftime('%d/%m/%Y')
+        self.shares_df.reset_index(inplace=True,drop = True)#if this is not done via inplace it will create a copy. also need to drop useless index column
         
         
         
@@ -129,7 +84,7 @@ class shares_analysis:
 
         #assume the day df is created we will update the date time values and sort it just in case.
         assert self.day_df["aest_day"].dtype == "object", f'Column is not of type string column is {self.day_df["aest_day"].dtype}'
-        print(f"first value in day df type: {type(self.day_df.iloc[0,:]['aest_day'])}")
+        logging.debug(f"first value in day df type: {type(self.day_df.iloc[0,:]['aest_day'])}")
         self.day_df['aest_day_datetime'] = pd.to_datetime(self.day_df['aest_day'], format="%d/%m/%Y")
         #self.save_day_df_cache()df
 
@@ -137,99 +92,6 @@ class shares_analysis:
         self.update_price_model_res_df()
         self.df_is_updated = False
         self.completed_tickers = []
-
-
-
-
-
-        if build_cache_df:
-            self.save_day_df_cache()
-
-        
-        #be
-#     def update_column_series(model_res_df = True, day_df = True, df_to_update):
-#method potentially not required. 
-#         if model_res_df = True:
-            
-#             for col in list(df_to_update.columns):
-#                 if col not in self.model_res_df.columns:
-#                     df_to_update
-
-    def update_cache(self):
-        files = os.listdir(self.json_raw_location)
-        
-        files_to_update = list(set(files) -set(self.cached_files))
-        
-        #self.saved_files_this_run+files_to_update
-        df_data = pd.DataFrame()
-        
-        print(f"Files to update length in update_cache method df_manager: {len(files_to_update)}")
-        if len(files_to_update)== 0:
-            "no updates required"
-            raise Exception("No updates required.")
-        
-        for file in tqdm(files_to_update):
-            if file in self.saved_files_this_run:
-                continue
-            print(f"init function shares_analysis running, updating file {file}")
-            df_temp = self.get_data_to_df(file)
-            df_data = pd.concat([df_data,df_temp])
-        ####
-        #HANDLE if missing days on cache update. 
-        ###
-        df_data = df_data[list(set(list(df_data.columns)) - set(self.columns_to_drop))]
-        #generate another day df .
-
-        full_dates = pd.date_range(start=df_data["aest_time"].min(), end=df_data["aest_time"].max(), freq='B')
-        
-        
-        ##create multi index dataframe
-        full_df = pd.DataFrame(
-            [(date.strftime('%d/%m/%Y'), code) for date in full_dates for code in self.all_codes],
-            columns=['aest_day', 'code']
-        )
-        df_data = pd.merge(full_df, df_data, on = ["aest_day", "code"], how="left")
-
-        ##df data should now include missing days as na (only weekdays)
-
-
-
-        df_data["updated_at"]= pd.to_datetime(df_data["updated_at"])
-
-        
-        
-
-        #the below lines are done if a cashed
-        
-        df_data['aest_time'] = df_data['updated_at'].dt.tz_convert(aest)
-        df_data["aest_day"] = df_data["aest_time"].dt.strftime('%d/%m/%Y')
-        df_data['aest_day_datetime'] = pd.to_datetime(df_data['aest_day'], format="%d/%m/%Y")
-        idx = df_data.groupby(["code","aest_day"])["aest_time"].idxmax()
-        temp_df = df_data.loc[idx]
-        temp_df = temp_df.sort_values("aest_time")
-        self.day_df = pd.concat([self.day_df, temp_df]).drop_duplicates(subset=['aest_time', 'code'], keep='first')
-        
-        self.df_is_updated = True
-        #full_dates = pd.date_range(start=temp_df["aest_time"].min(), end=temp_df["aest_time"].max(), freq='B')
-        
-
-        
-    def save_day_df_cache(self):
-        '''
-        saves the current day df into the location of the previous day_df cache. Should only be run when required
-        DO NOT RUN DURING TESTING
-        
-        '''
-        if not self.get_cache_df and not self.build_cache_df:
-            raise Exception("If not building from scratch or not using cache df do not use save_day_df_cache, can lead to data loss. ")
-
-        res = list(set(self.cached_files) | set(self.saved_files_this_run))
-
-        self.day_df.to_csv(self.cache_df_location, index = False)#for now we read it in. and save it. 
-        all_cached_files = res
-        pd.Series(all_cached_files).to_json(self.day_df_cache_control_location)
-        self.saved_files_this_run =[]
-        self.cached_files =res
         
     
     def get_all_raw_data(self):
@@ -278,7 +140,7 @@ class shares_analysis:
         #we now have the latest for day for each code in the day df. 
         # needs to handle if empty, currently doesnt. 
         temp_df = temp_df.set_index('code')
-        columns = ['title', 'change', 'ytd_percent_change', 'month_percent_change','week_percent_change', 'sector', 'updated_at','last','aest_day']
+        columns = ['change', 'ytd_percent_change', 'month_percent_change','week_percent_change', 'sector', 'updated_at','last','aest_day']
         self.model_res_df[columns] = temp_df[columns]
         
         
@@ -326,7 +188,7 @@ class shares_analysis:
         title = f'rolling average {num_days}'
         self.averages_calculated.append(num_days)
         self.day_df[title] = self.day_df.groupby('code')['last'].transform(lambda x: x.rolling(window=num_days, min_periods = min_periods).mean())
-        print("shares analysis, calc moving average done: "+title)
+        logging.info("shares analysis, calc moving average done: "+title)
             
     def gen_share_lst(self,extra_metrics = [],codes_to_update =[]):
         """
@@ -343,8 +205,8 @@ class shares_analysis:
         tickers = list(set(list(self.all_codes)) - set(list(self.share_metric_df.index)))
 
         tickers = list(set(tickers) | set(codes_to_update))
-        print()
-        print(len(tickers))
+
+        logging.info(f"amount of codes to check len(tickers)")
         tickers = [code + '.AX' for code in tickers]
         for ticker_name in tickers:
             
@@ -475,10 +337,10 @@ class shares_analysis:
         idx = temp_df.groupby('code')['aest_day_datetime'].idxmax()
         temp_df = temp_df.loc[idx]
         temp_df.set_index('code', inplace=True)
-        print(f"Duplicated index values temp_df: {pd.Series(temp_df.index)[pd.Series(temp_df.index).duplicated()]}")
-        print(f"Duplicated columns values temp_df: {pd.Series(temp_df.columns)[pd.Series(temp_df.columns).duplicated()]}")
-        print(f"Duplicated index values self.model_res_df: {pd.Series(self.model_res_df.index)[pd.Series(self.model_res_df.index).duplicated()]}")
-        print(f"Duplicated columns values self.model_res_df: {pd.Series(self.model_res_df.columns)[pd.Series(self.model_res_df.columns).duplicated()]}")
+        logging.info(f"Duplicated index values temp_df: {pd.Series(temp_df.index)[pd.Series(temp_df.index).duplicated()]}")
+        logging.info(f"Duplicated columns values temp_df: {pd.Series(temp_df.columns)[pd.Series(temp_df.columns).duplicated()]}")
+        logging.info(f"Duplicated index values self.model_res_df: {pd.Series(self.model_res_df.index)[pd.Series(self.model_res_df.index).duplicated()]}")
+        logging.info(f"Duplicated columns values self.model_res_df: {pd.Series(self.model_res_df.columns)[pd.Series(self.model_res_df.columns).duplicated()]}")
         self.model_res_df[list(temp_df.columns)] = temp_df#update all columns in temporary df
         #temp_df now contains the latest values for each share only, then can be merged
         self.day_df.drop(columns = [f'{day_small}/{day_long}_buy_streak',f'{day_small}/{day_long}_model_difference' ], inplace = True)#drop columns to save memory. 
@@ -501,7 +363,7 @@ class shares_analysis:
             self.day_df = self.day_df.sort_values(by=['code', 'aest_day_datetime']).reset_index(drop=True)
             col_names = []
             for col in columns:
-                print(col)
+                logging.info(f"calculating gradient for {col}")
                 gradient_col_name = f'gradient_{col}_{day}'
                 col_names.append(gradient_col_name)
                 # Ensure the data is sorted by 'code' and 'aest_day_datetime'
@@ -521,7 +383,7 @@ class shares_analysis:
             temp_df = temp_df.set_index("code")
             self.model_res_df
             self.model_res_df.update(temp_df)
-            print(temp_df.columns)
+            logging.info(temp_df.columns)
 
             # Add new columns
             for col in temp_df.columns:
@@ -559,111 +421,114 @@ class shares_analysis:
             
     def calc_rsi(self, window = 14, min_periods = 13):
         name_RSI = f'RSI_window_{window}_periods_{min_periods}'
-        print("beggining calc_rsi")
-        if name_RSI in list(self.day_df.columns) and self.df_is_updated == False:
-            #if dataframe has not been updated we dont want to do this calculation. 
-            #doing this just in case./ 
-            idx = self.day_df.groupby('code')['aest_day_datetime'].idxmax()
-            temp_df = self.day_df.loc[idx]
-        
-            #we now have the latest prices stored in the temp df 
-
-            temp_df = temp_df.set_index("code")
-            self.model_res_df[name_RSI] = temp_df[name_RSI]
-            print(f"not calculating rsi as self.df_is_updated = {self.df_is_updated} and column exists")
-            return
-
-
-        def custom_func(rolling_window,calc_type ="avg_gain"):
-            
-            self.day_df = self.day_df.sort_values(by=['code', 'aest_day_datetime']).reset_index(drop=True)
-            #ensure df is sorted.
-            '''
-            custom function to calculate avgloss and avg gain to be used via.apply to the day_df.
-            returns a floating point value for every row.
-            
-            '''
-            if calc_type == "avg_loss":
-
-                is_loss = rolling_window<0
-                res = rolling_window[is_loss].mean()
-            elif calc_type == "avg_gain":
-                is_gain = rolling_window>0
-
-                res = rolling_window[is_gain].mean()
-                #print(res)
-            return res
-        
+        self.day_df = self.day_df.sort_values(by=['code', 'aest_day_datetime']).reset_index(drop=True)#required for the smoothing logic for average gain and loss. 
+        logging.info("beggining calc_rsi")
         name_RSI = f'RSI_window_{window}_periods_{min_periods}'
         name_gain = f'avg_gain_window_{window}_periods_{min_periods}'
         name_loss = f'avg_loss_window_{window}_periods_{min_periods}'
         #get avg_gain
-        print("starting calc gain")
-        self.day_df['gain'] = self.day_df['change'].where(self.day_df['change'] > 0, 0)
-        self.day_df['loss'] = self.day_df['change'].where(self.day_df['change'] < 0, 0).abs()
-        print("starting calc loss")
-        # Use rolling mean to calculate avg_gain and avg_loss
+        logging.info("starting calc gain")
+        self.day_df['gain'] = self.day_df['change'].mask(self.day_df['change'] < 0, 0)#mask -s opposite to .where but handles na differently. 
+
+        self.day_df['loss'] = self.day_df['change'].mask(self.day_df['change'] > 0, 0).abs()#.mask instead of,where to ensure na values remain na values in the loss column
+        logging.info("starting calc loss")
 
         #issues we may have 
-        self.day_df = self.day_df.sort_values(by=['code', 'time'])#sorting may potentially fix the issue. 
-
+        
+        if name_gain not in self.day_df.columns:
+            self.day_df[name_gain] = np.nan
+        if name_loss not in self.day_df.columns:
+            self.day_df[name_loss] = np.nan
         #also this does not handle if days are missing. 
+        
+        #essentially the problem is it is dependency basec vectorized calculation. Meaning you cannot know ahead of time the valuesof the previously updated avg gain.
+        #vector calculations is  actually just splitting up each inidividual calculation into a seperate thread kind of.
+        #so becase the previous avg gain updates, the current avg gain, each calculation is dependent on the calculation before. So essentially we need to do a loop. 
+        # it is best to do the cloop on an numpy array. 
 
-        self.day_df[name_gain] = self.day_df.groupby('code')['gain'].rolling(window=window, min_periods=min_periods).mean().reset_index(level=0, drop=True)
-        self.day_df[name_loss] = self.day_df.groupby('code')['loss'].rolling(window=window, min_periods=min_periods).mean().reset_index(level=0, drop=True)
+        #initialise the columns if they do not exist. 
         
-        #temp = self.day_df.groupby('code')['change'].rolling(window = window
-                                                                #, min_periods = min_periods).apply(custom_func, args = ("avg_gain",))
-        #temp = temp.reset_index(level = 0, drop = True)
-        #self.day_df[name_gain] = temp
+        ###make it work for multiple codes with a loop for each code and store the index. 
+        logging.debug("the dataframe before RSI calculated")
+        logging.debug(self.day_df[["code","updated_at","last"]])
+        for code, group in self.day_df.groupby('code'):
+            idx = group.index#store idx for reassigning back to the dataframe.
+            
+            logging.debug(f"the idx for this group {code} is: {idx}")
+
+            avg_gain = group[name_gain].to_numpy()
+            avg_loss = group[name_loss].to_numpy()#doesnt save the indexing obviously
+            gain_temp = group["gain"].to_numpy()
+            loss_temp = group["loss"].to_numpy()
+            logging.debug("avg gain")
+            logging.debug(avg_gain)
+            assert len(avg_gain) == len(avg_loss), f"The length must be the same of avg gain and avg loss. avg gain: {len(avg_gain)}, avg_loss {len(avg_loss)}"
+            # if np.isnan(avg_gain[0]):
+            #     number_nan_days = 1
+            number_of_nan_days = 0
+            RSI_initialised = False
+            logging.debug(f"this is the value of gain_temp {gain_temp}")
+            for i in range(1,len(avg_gain)):
+                logging.debug(i)             
+                if (np.isnan(avg_gain[i-1])) and not RSI_initialised:
+
+                    if not np.isnan(gain_temp[i]):
+                        #if there is padding of extra days for a code it should be handled. 
+                        number_of_nan_days +=1
+                        logging.debug(f"number of days updated to {number_of_nan_days}")
+                    if number_of_nan_days >= 14:
+                        
+                        #there has been 14 days in a row of na values in avg_gain
+                        logging.debug(f"check to see if the current gain is na {gain_temp[i]}")
+                        if not np.isnan(gain_temp[i]):
+                            logging.debug("RSI initialised.")
+                            logging.debug(f"{gain_temp[i-13:i+1]} evalulates to {gain_temp[i-13:i+1].mean()} type of gain_temp: {gain_temp.dtype}")
+                            logging.debug(f"{loss_temp[i-13:i+1]} evalulates to {loss_temp[i-13:i+1].mean()} type of loss_temp: {loss_temp.dtype}")
+                            # we can update and initialise the RSI
+                            avg_gain[i] = np.nanmean(gain_temp[i-13:i+1])#take last 14 values and initialise the RSI
+                            #do nanmean just to ensure a bit more stability for the algorithm. might give slightly incorrect values but will be mostly fine. 
+                            avg_loss[i] = np.nanmean(loss_temp[i-13:i+1])#use the initial value.
+                            number_of_nan_days=0
+                            last_valid_gain = avg_gain[i]
+                            last_valid_loss = avg_loss[i] 
+                            RSI_initialised = True
+                        else:
+                            logging.debug("the avg_gain was meant to be initialised but the gain_temp was na. ")
+                            pass# we dont want to do anything and assume we are still missing values
+                
+                else:#this block only executes if RSI is initialised
+                    logging.debug("smoothing calculation to be done. ")
+                    RSI_initialised = True
+                    logging.debug(gain_temp[i])
+                    if np.isnan(gain_temp[i]):#condition to use last valid value. 
+                        logging.debug("going down missing day path")
+                        #for a na current gain (we are missing a day)
+                        #The RSI has been initialised (there must be a none na value in this column lower than this idx)
+                        #we hence want to use last valid value. 
+                        logging.debug(f"last valid gain {last_valid_gain}")
+                        avg_gain[i] = last_valid_gain
+                        # Get indices of non-NaN values before i
+                        avg_loss[i] = last_valid_loss
+                        
+                    else:#we know that gain is not na and avg_gain not na, and RSI has been initialised
+                        logging.debug(f"avg_")
+                        avg_gain[i] = (avg_gain[i-1]*13 + gain_temp[i])/14
+                        avg_loss[i] = (avg_loss[i-1]*13 + loss_temp[i])/14#if previous is na it will be na.
+                        logging.debug(f"avg_gain new = {avg_gain[i]}")
+                        last_valid_gain = avg_gain[i]
+                        last_valid_loss = avg_loss[i] 
+            logging.debug(f"the average gain results are {avg_gain}")
+            logging.debug(f"the average loss results are {avg_loss}")
+            self.day_df.loc[idx, name_gain] = avg_gain
+            self.day_df.loc[idx, name_loss] = avg_loss
         
-        #now get avg_loss
-        #temp = self.day_df.groupby('code')['change'].rolling(window = window
-                                                                #, min_periods = min_periods).apply(custom_func, args = ("avg_loss",))
-        #temp = temp.reset_index(level = 0, drop = True)
-        #self.day_df[name_loss] = temp
+        self.day_df[name_RSI] = 100 - (100/(1+(self.day_df[name_gain]/self.day_df[name_loss])))
         
-        
-        #complete the first step
-        #finds the ealiest day when the gain and the loss is not na
-        print("doing the rest")
-        temp = self.day_df[(~self.day_df[name_loss].isna())&(~self.day_df[name_gain].isna())]#first day for each code that is not na.)
-        
-        idx = temp.groupby('code')['aest_day_datetime'].idxmin(skipna = True)
-        
-        self.day_df['start_day_'+name_RSI] = self.day_df.index.isin(list(idx))
-        #we now have each avg_loss and avg_gain
-        self.day_df[name_RSI]= np.nan
-        self.day_df.loc[self.day_df['start_day_'+name_RSI],name_RSI] = 100 -(100/(
-            1+(self.day_df[name_gain]/self.day_df[name_loss])))
-        #we now can assume the only entries in RSI is the first entry that 
-        #what happens to codes that have no valid days at all? 
-        
-        
-        temp = self.day_df.groupby('code').shift(periods = 1)
-        
-        #create previous gain and previous loss columns
-        self.day_df['previous_'+name_gain] = temp[name_gain]
-        
-        self.day_df['previous_'+name_loss] = temp[name_loss]
-        
-        #set update df to not include days that are the starting days.
-        
-        update_df = self.day_df[~self.day_df['start_day_'+name_RSI]]
-        
-        #do the calculation. 
-        update_df[name_RSI] = 100-(100/(1+((update_df['previous_'+name_gain]*13+update_df[name_gain])/(
-            update_df['previous_'+name_loss]*13+update_df[name_loss]))))
-        
-        
-        #now we can update the dataframe
-        
-        self.day_df.loc[update_df.index,name_RSI] = update_df[name_RSI]
         
         
         #set model_res_df
         
-        #
+        
         idx = self.day_df.groupby('code')['aest_day_datetime'].idxmax()
         temp_df = self.day_df.loc[idx]
         
@@ -671,7 +536,7 @@ class shares_analysis:
 
         temp_df = temp_df.set_index("code")
         self.model_res_df[name_RSI] = temp_df[name_RSI]
-        self.day_df.drop(columns = ['gain', 'loss',name_gain,name_loss,'previous_'+name_gain,'previous_'+name_loss,'start_day_'+name_RSI], inplace = True)#remove columns to save memory. 
+        #self.day_df.drop(columns = ['gain', 'loss'], inplace = True)#remove columns to save memory. (must preserve )
         
 
     def test_model(self, model):
