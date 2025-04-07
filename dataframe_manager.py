@@ -140,7 +140,7 @@ class shares_analysis:
         #we now have the latest for day for each code in the day df. 
         # needs to handle if empty, currently doesnt. 
         temp_df = temp_df.set_index('code')
-        columns = ['change', 'ytd_percent_change', 'month_percent_change','week_percent_change', 'sector', 'updated_at','last','aest_day']
+        columns = ['change', 'ytd_percent_change', 'month_percent_change','week_percent_change', 'company_sector', 'updated_at','last','aest_day']
         self.model_res_df[columns] = temp_df[columns]
         
         
@@ -148,12 +148,13 @@ class shares_analysis:
             
     
     def create_day_df(self):
-        idx = self.shares_df.groupby(["code","aest_day"])["aest_time"].idxmax()
+        idx = self.shares_df.groupby(["code","aest_day"])["aest_time"].idxmax()#should be the lowest idx. 
         temp_df = self.shares_df.loc[idx]
         temp_df = temp_df.sort_values("aest_time")
-        full_dates = pd.date_range(start=temp_df["aest_time"].min(), end=temp_df["aest_time"].max(), freq='B')
+        full_dates = pd.date_range(start=temp_df["aest_time"].min(), end=temp_df["aest_time"].max(), freq='B',normalize = True)# we must normalize. date_range only works best with dates not datetimes.
+
         
-        
+        #FIXED LFG
         ##create multi index dataframe
         full_df = pd.DataFrame(
             [(date.strftime('%d/%m/%Y'), code) for date in full_dates for code in self.all_codes],
@@ -282,7 +283,7 @@ class shares_analysis:
                     
         
         
-    def create_smoothing_function_model(self,day_long, day_small):
+    def create_smoothing_function_model(self,day_long, day_small, min_periods_long= None, min_periods_small = None):
         assert day_long > day_small, "day long must be greater than day small"
         
         '''
@@ -290,12 +291,17 @@ class shares_analysis:
         updated will technically have the wrong datetime, so you need to update every model at each time to make this 
         value accurate. or you have seperate date time values for each model which makes more sense in my opinion. 
         '''
+        if min_periods_long == None:
+            min_periods_long = int(day_long//1.4)
+        if min_periods_small == None:
+
+            min_periods_small = int(day_small//1.4)
         
         #whenever this is called we want to update the values. 
-        self.calc_moving_average(num_days = day_long, min_periods = int(day_long//1.4))
+        self.calc_moving_average(num_days = day_long, min_periods = min_periods_long)
         
             
-        self.calc_moving_average(num_days = day_small, min_periods = int(day_small//1.4))
+        self.calc_moving_average(num_days = day_small, min_periods = min_periods_small)
             
         #required averages have been calculated. 
         title_long = f'rolling average {day_long}'
@@ -460,6 +466,11 @@ class shares_analysis:
             avg_loss = group[name_loss].to_numpy()#doesnt save the indexing obviously
             gain_temp = group["gain"].to_numpy()
             loss_temp = group["loss"].to_numpy()
+            gain_temp = np.where(gain_temp == None, np.nan, gain_temp)
+            loss_temp = np.where(loss_temp == None, np.nan, loss_temp)
+            avg_gain = np.where(avg_gain == None, np.nan, avg_gain)
+            avg_loss = np.where(avg_loss == None, np.nan, avg_loss)
+            #above is required for some functionality. It should not be None. it should be nan for numeric claculations. I changed it to none which impacted this. not the best idea.
             logging.debug("avg gain")
             logging.debug(avg_gain)
             assert len(avg_gain) == len(avg_loss), f"The length must be the same of avg gain and avg loss. avg gain: {len(avg_gain)}, avg_loss {len(avg_loss)}"
@@ -468,11 +479,15 @@ class shares_analysis:
             number_of_nan_days = 0
             RSI_initialised = False
             logging.debug(f"this is the value of gain_temp {gain_temp}")
-            for i in range(1,len(avg_gain)):
-                logging.debug(i)             
-                if (np.isnan(avg_gain[i-1])) and not RSI_initialised:
 
-                    if not np.isnan(gain_temp[i]):
+            #this below if conditions could maybe be written better
+            #essentially there is 3 main conditions we are checking. is the RSI_initialized is the previous avg gain na, is the current avg gain na,
+            #has the number of na days exceeded 14.
+            for i in range(1,len(avg_gain)):#why did I make it skip the first row? 
+                logging.debug(i)          
+                if (pd.isna(avg_gain[i-1])) and not RSI_initialised:
+
+                    if not pd.isna(gain_temp[i]):
                         #if there is padding of extra days for a code it should be handled. 
                         number_of_nan_days +=1
                         logging.debug(f"number of days updated to {number_of_nan_days}")
@@ -485,6 +500,7 @@ class shares_analysis:
                             logging.debug(f"{gain_temp[i-13:i+1]} evalulates to {gain_temp[i-13:i+1].mean()} type of gain_temp: {gain_temp.dtype}")
                             logging.debug(f"{loss_temp[i-13:i+1]} evalulates to {loss_temp[i-13:i+1].mean()} type of loss_temp: {loss_temp.dtype}")
                             # we can update and initialise the RSI
+                           
                             avg_gain[i] = np.nanmean(gain_temp[i-13:i+1])#take last 14 values and initialise the RSI
                             #do nanmean just to ensure a bit more stability for the algorithm. might give slightly incorrect values but will be mostly fine. 
                             avg_loss[i] = np.nanmean(loss_temp[i-13:i+1])#use the initial value.
@@ -500,7 +516,7 @@ class shares_analysis:
                     logging.debug("smoothing calculation to be done. ")
                     RSI_initialised = True
                     logging.debug(gain_temp[i])
-                    if np.isnan(gain_temp[i]):#condition to use last valid value. 
+                    if pd.isna(gain_temp[i]):#condition to use last valid value. 
                         logging.debug("going down missing day path")
                         #for a na current gain (we are missing a day)
                         #The RSI has been initialised (there must be a none na value in this column lower than this idx)
