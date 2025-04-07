@@ -18,7 +18,7 @@ test_data = {
                 -1.77, -1.59, -7.98, 4.78, -0.33, 0.75, -5.58, 0.27, 4.97, 4.25, 4.66],
     "code": ["CBA", "CBA", "CBA", "CBA", "CBA","CBA", "CBA", "CBA", "CBA", "CBA","CBA",
               "CBA", "CBA", "CBA", "CBA","CBA", "CBA", "CBA", "CBA", "CBA","CBA", "CBA", "CBA", "CBA", "CBA"],
-    "sector": 25*["Financials"],
+    "company_sector": 25*["Financials"],
     "ytd_percent_change": 25*[5],
     "month_percent_change": 25*[3],
     'week_percent_change': 25*[2],
@@ -31,7 +31,7 @@ dates = pd.date_range(start="2025-01-13", periods=20, freq="B")
 RSI_test_data2 = {
     "code": ["TEST123"] * 20,  # Example stock code
     "title": ["This is a test share"]*20,
-    "sector": ["mining"]*20,
+    "company_sector": ["mining"]*20,
     "ytd_percent_change": 20*[10],
     "month_percent_change": 20*[7],
     'week_percent_change': 20*[69],

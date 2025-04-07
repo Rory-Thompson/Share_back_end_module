@@ -1,9 +1,9 @@
 import pytest
 
 import numpy as np
-from dataframe_manager import shares_analysis
-from tests.test_data import test_data as test_data
-from tests.test_data import RSI_test_data2 as RSI_test_data2
+from Backend_shares_py.dataframe_manager import shares_analysis
+from Backend_shares_py.tests.test_data import test_data as test_data
+from Backend_shares_py.tests.test_data import RSI_test_data2 as RSI_test_data2
 import copy
 print(type(test_data))
 import pandas as pd 

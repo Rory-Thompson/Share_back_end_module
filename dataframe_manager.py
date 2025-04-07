@@ -483,6 +483,16 @@ class shares_analysis:
             #this below if conditions could maybe be written better
             #essentially there is 3 main conditions we are checking. is the RSI_initialized is the previous avg gain na, is the current avg gain na,
             #has the number of na days exceeded 14.
+            try:
+                if not pd.isna(gain_temp[0]):
+                    #we want to include the first day if there was a change.
+                    number_of_nan_days = 1
+                    logging.debug("gaintemp at index 0 is not na. ")
+                else:
+                    logging.debug(f"index 0 is na. {gain_temp[0]}")
+            except Exception as e:
+                logging.debug("some error occured accessing 0th element. len of gain_temp = {len(gain_temp)}")
+                     
             for i in range(1,len(avg_gain)):#why did I make it skip the first row? 
                 logging.debug(i)          
                 if (pd.isna(avg_gain[i-1])) and not RSI_initialised:
