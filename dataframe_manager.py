@@ -1,14 +1,14 @@
-import requests
+
 import pandas as pd
-import json
+
 import logging
 import os
 from tqdm import tqdm
 import pandas as pd
 from pytz import timezone
-import warnings
+
 import numpy as np
-import requests
+
 aest = timezone('Australia/Sydney')
 import traceback
 import time

@@ -1,20 +1,8 @@
-import requests
-import pandas as pd
-import json
-import logging
-from datetime import datetime
-import os
-from tqdm import tqdm
-import pandas as pd
+
 from pytz import timezone
 import matplotlib.dates as mdates
-import warnings
 import numpy as np
-import yfinance
-import requests
 aest = timezone('Australia/Sydney')
-import traceback
-import time
 import seaborn as sns
 import matplotlib.pyplot as plt
 import io
