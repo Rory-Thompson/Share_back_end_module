@@ -47,7 +47,7 @@ class shares_analysis:
         #in all cases we want to read the yfinance results. It is broken constantly. with api client errors of too many requests. 
         logging.info("reading metrics yfinance results")
         self.yfinance_location = os.path.join(location_base, "rory_model_results","yfinance_results.csv") 
-        self.share_metric_df= pd.read_csv(self.yfinance_location,index_col = "code")
+        #self.share_metric_df= pd.read_csv(self.yfinance_location,index_col = "code")
         logging.info("metric df yfinance has been read")
        
         self.model_res_df = pd.DataFrame()
