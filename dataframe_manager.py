@@ -186,7 +186,7 @@ class shares_analysis:
         
         
         '''
-        title = f'rolling average {num_days}'
+        title = f'rolling_average_{num_days}'
         self.averages_calculated.append(num_days)
         self.day_df[title] = self.day_df.groupby('code')['last'].transform(lambda x: x.rolling(window=num_days, min_periods = min_periods).mean())
         logging.info("shares analysis, calc moving average done: "+title)
@@ -304,8 +304,8 @@ class shares_analysis:
         self.calc_moving_average(num_days = day_small, min_periods = min_periods_small)
             
         #required averages have been calculated. 
-        title_long = f'rolling average {day_long}'
-        title_small = f'rolling average {day_small}'
+        title_long = f'rolling_average_{day_long}'
+        title_small = f'rolling_average_{day_small}'
         #if the shorter day period price is greater than the longer period price, it is a buy.
         self.day_df[f'{day_small}/{day_long}_model_buy_status'] = self.day_df[title_small]>self.day_df[title_long]
         self.day_df[f'{day_small}/{day_long}_model_difference'] = self.day_df[title_small]-self.day_df[title_long]
