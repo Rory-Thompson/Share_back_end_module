@@ -11,6 +11,32 @@ import base64
 from matplotlib.colors import to_rgb
 
 
+import matplotlib.pyplot as plt
+
+def plot_mover(ticker,title, percent_change, last_price, plot_website):
+    plt.style.use("dark_background")
+    arrow = "↑" if (percent_change >= 0) else "↓"
+    color = "green" if (percent_change >= 0) else "red"
+    fig = plt.figure(figsize=(3, 2))
+    plt.axis("off")
+    plt.text(0.5, 0.7, f"{ticker}: {title}", fontsize=13, ha='center', weight='bold')
+    plt.text(0.5, 0.4, f"{arrow} {abs(percent_change):.2f}%", fontsize=15, color=color, ha='center')
+    plt.text(0.5, 0.2, f"last price:  {abs(last_price):.2f}", fontsize=15, color="white", ha='center')
+    plt.tight_layout()
+    if plot_website:
+        img_buffer = io.BytesIO()
+        fig.savefig(img_buffer, format="png")  # Save to buffer
+        img_buffer.seek(0)
+        
+        # Encode to base64 so it can be displayed in Dash
+        encoded_image = base64.b64encode(img_buffer.getvalue()).decode("utf-8")
+        plt.close(fig)  # Free memory
+        print("plotting appears to have been successful.")
+        return f"data:image/png;base64,{encoded_image}" 
+    # Show plot
+    plt.show()
+    #plt.savefig(save_path, transparent=True)
+    #plt.close()
 
 
 class SharesPlotter:
@@ -95,7 +121,7 @@ class SharesPlotter:
         print(f"{codes}, codes to be plotting in SharesPlotter")
         for average in averages:
             #print(pd.Series(list(self.day_df.columns)))
-            title = f'rolling average {average}'
+            title = f'rolling_average_{average}'
             if (title not in list(self.model_res_df.columns)) or self.shares_analysis.df_is_updated:
 
                 #the average has not been calculated yet
@@ -125,7 +151,7 @@ class SharesPlotter:
         # Plot the rolling average
             for average in averages:
             
-                title = f'rolling average {average}'
+                title = f'rolling_average_{average}'
                 
                 ax1[0].plot(temp_df["aest_day_datetime"].dt.tz_localize(None), temp_df[title], label=f'{code} {title}', linewidth=2)
         
@@ -183,7 +209,7 @@ class SharesPlotter:
 
         # Ensure metrics exist
         
-
+        plt.style.use("dark_background")
         sector = df.loc[code, "sector"]
         sector_df = df[df["sector"] == sector].dropna(subset=[metric_x, metric_y, size_metric])
         

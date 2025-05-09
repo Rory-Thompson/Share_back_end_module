@@ -49,7 +49,7 @@ class TradingModel:
         #	10/30_model_%_difference example name 
         
         self.config_df = pd.DataFrame(self.config)
-        self.create_model()
+        #the create model must now be run manually. 
         
         
     

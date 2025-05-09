@@ -41,13 +41,12 @@ class shares_analysis:
        
         self.day_df = None#initialization
         self.shares_df = shares_df#is None, not the best logic. will be set to parameter shares_df if shares_df is not none and get_cache_df is True
-        aest = timezone('Australia/Sydney')
-        self.df_is_updated = True
 
+       
         #in all cases we want to read the yfinance results. It is broken constantly. with api client errors of too many requests. 
         logging.info("reading metrics yfinance results")
         self.yfinance_location = os.path.join(location_base, "rory_model_results","yfinance_results.csv") 
-        #self.share_metric_df= pd.read_csv(self.yfinance_location,index_col = "code")
+
         logging.info("metric df yfinance has been read")
        
         self.model_res_df = pd.DataFrame()
@@ -61,13 +60,22 @@ class shares_analysis:
 
         #the below logic requires inplace operations. df_complete is pointing to the same reference objects as either self.shares_df or self.day_df.
         #if a copy is done it will no longer point to the same location, doubling memory usage.
-        self.shares_df["updated_at"]= pd.to_datetime(self.shares_df["updated_at"])
-        
+        self.shares_df.loc[:,"updated_at"]= pd.to_datetime(self.shares_df["updated_at"], errors = "coerce", utc = True)
+        self.shares_df["updated_at"] = self.shares_df["updated_at"].astype('datetime64[ns, UTC]')
 
-        #the below lines are done if a cashed
-        
+        if len(shares_df) > 0:
+            print("dtypes shares df: ",self.shares_df.dtypes)
+            print("shares_df updated at values.:", self.shares_df.loc[0,"updated_at"])
+            print("type of value at 0: ",self.shares_df.loc[0,"updated_at"], ": ", type(self.shares_df.loc[0,"updated_at"]))
+
+         
+        aest = timezone('Australia/Sydney')
+        self.df_is_updated = True
         self.shares_df['aest_time'] = self.shares_df['updated_at'].dt.tz_convert(aest)
         self.shares_df["aest_day"] = self.shares_df["aest_time"].dt.strftime('%d/%m/%Y')
+        #logging.debug(f"first value in day df type: {type(self.shares_df.iloc[0,:]['aest_day'])}")
+        self.shares_df['aest_day_datetime'] = pd.to_datetime(self.shares_df['aest_day'], format="%d/%m/%Y")
+        self.shares_df.dropna(subset=['aest_day_datetime'], inplace=True)#there is not much point having data that has no day datetime, it causes issues down the line.
         self.shares_df.reset_index(inplace=True,drop = True)#if this is not done via inplace it will create a copy. also need to drop useless index column
         
         
@@ -76,24 +84,16 @@ class shares_analysis:
         #self.gen_share_lst()#Note this does not update anything if using cache df. although it probably should.
         self.models = {}
         self.averages_calculated = []
-        type(self.day_df)
-        self.day_df is None and self.create_day_df()#if self.day_df is None (implies it must be created from shares_df) Then it will do the function
-
-        self.columns_to_drop = ["path","is_asr", "star_stock","status", "deleted_at","type"]
-        self.day_df = self.day_df[list(set(list(self.day_df.columns)) - set(self.columns_to_drop))]
-
-        #assume the day df is created we will update the date time values and sort it just in case.
-        assert self.day_df["aest_day"].dtype == "object", f'Column is not of type string column is {self.day_df["aest_day"].dtype}'
-        logging.debug(f"first value in day df type: {type(self.day_df.iloc[0,:]['aest_day'])}")
-        self.day_df['aest_day_datetime'] = pd.to_datetime(self.day_df['aest_day'], format="%d/%m/%Y")
-        #self.save_day_df_cache()df
-
-        self.day_df.dropna(subset=['aest_day_datetime'], inplace=True)#there is not much point having data that has no day datetime, it causes issues down the line. 
-        self.update_price_model_res_df()
+       
         self.df_is_updated = False
         self.completed_tickers = []
+        self.share_metric_df = pd.DataFrame()
         
-    
+    def get_cache_metric_df(self):
+        #get the cached metric df.
+        
+         self.share_metric_df= pd.read_csv(repr(self.yfinance_location).strip("'"),index_col = "code")
+        
     def get_all_raw_data(self):
         files = os.listdir(self.json_raw_location)
         
@@ -128,7 +128,7 @@ class shares_analysis:
         self.saved_files_this_run.append(file)
         return df_data
 
-    def update_price_model_res_df(self):
+    def update_price_model_res_df(self, extra_cols= []):
         
         '''
         updates the 'last 
@@ -140,7 +140,8 @@ class shares_analysis:
         #we now have the latest for day for each code in the day df. 
         # needs to handle if empty, currently doesnt. 
         temp_df = temp_df.set_index('code')
-        columns = ['change', 'ytd_percent_change', 'month_percent_change','week_percent_change', 'company_sector', 'updated_at','last','aest_day']
+        cols_new = set(['change', 'ytd_percent_change', 'month_percent_change','week_percent_change', 'company_sector', 'updated_at','last','aest_day']+extra_cols) - set(['rolling_average_21', 'rolling_average_9'])
+        columns = list(cols_new)
         self.model_res_df[columns] = temp_df[columns]
         
         
